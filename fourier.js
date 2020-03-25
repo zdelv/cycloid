@@ -6,6 +6,7 @@ const fragShaderSource = `#version 300 es
 precision highp float;
 
 uniform sampler2D texture0;
+uniform float time;
 
 out vec4 outColor;
 
@@ -40,6 +41,10 @@ void main() {
 `
 
 const sineShaderSource = `#version 300 es
+const float PI = 3.1415926535897932384626433832795;
+const float PI_2 = 1.57079632679489661923;
+const float PI_4 = 0.785398163397448309616;
+
 layout (location = 0) in vec3 a_position;
 
 uniform sampler2D texture0;
@@ -71,14 +76,16 @@ vec3 sine(in vec3 pos, in float time) {
     float yval = 0.0;
     int texFreq;
     vec2 texPos;
+    float k = 0.0;
     for (float i = 0.0; i <= float(freqWidth); i++)
     {
         texPos = vec2(1.0 / (float(freqWidth)-i), 0.0);
         //texFreq = texture(texture0, vec2(texPos,0.0)).w * 255.0;
         texFreq = decode(texture0, texPos);
-        yval += sineAmplitude * sin((pos.x - omega * time) * float(texFreq));
+        k = (2.0*PI*float(texFreq))/10.0;       // Wavenumber. 10 is wavelength lambda
+        yval += sineAmplitude * sin(k * pos.x - 2.0*PI*float(texFreq) * time);  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
     }
-
+    
     return vec3(pos.x, yval, pos.z);
 }
 
@@ -89,14 +96,16 @@ vec3 cycloid(in vec3 pos, in float time)
     float yval = 0.0;
     float xval = 0.0;
     float zval = 0.0;
+    float k = 0.0;
     int texFreq;
     vec2 texPos;
     for (float i = 0.0; i <= float(freqWidth); i++)
     {
         texPos = vec2(1.0 / (float(freqWidth)-i), 0.0);
         texFreq = decode(texture0, texPos);
-        xval += cycloidAmplitude * cos((pos.z - time * omega) * float(texFreq));
-        yval += cycloidAmplitude * sin((pos.z - time * omega) * float(texFreq));
+        k = (2.0*PI*float(texFreq))/10.0;       // Wavenumber. 10 is wavelength lambda
+        xval += cycloidAmplitude * cos((k * pos.z - time * 2.0*PI*float(texFreq)));
+        yval += cycloidAmplitude * sin((k * pos.z - time * 2.0*PI*float(texFreq)));
     }
     
     return vec3(xval,yval,pos.z);
@@ -202,6 +211,7 @@ function test()
         sineScaledWidth: 20,
         sineAmplitude: 1,
         cycloidAmplitude: 1,
+        timeFactor: 0.5
     }
 
     state.scaledHeight = state.scaledWidth / state.aspectRatio;
@@ -315,6 +325,7 @@ function test()
     {
         stats.begin();
         globalTime = time / 1000;
+        globalTime *= state.timeFactor;
             
 
         gl.enable(gl.DEPTH_TEST);
@@ -385,6 +396,7 @@ function test()
     gui.add(state, "scaledWidth", 0, 10);
     gui.add(state, "sineAmplitude", 0, 10);
     gui.add(state, "cycloidAmplitude", 0, 10);
+    gui.add(state, "timeFactor", 0.001, 2);
 }
 
 window.onload(test());
