@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<head>
+    <script id="vertex-shader" type="shader">
+        #version 300 es
+
+        in vec4 a_position;
+
+        void main() {
+            gl_Position = a_position;
+        }
+    </script>
+    <script id="frag-shader" type="shader">
+        #version 300 es
+
+        precision mediump float;
+
+        out vec4 outColor;
+        
+        void main() {
+            outColor = vec4(1.0, 0.0, 0.5, 1.0);
+        }
+    </script>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body style="font-family: Arial, Helvetica, sans-serif;">
+    <canvas id="c">
+    </canvas>
+    <div style="position: fixed; z-index: 0; left: 25vw; top: 0; color: white;">
+        <p>Cycloid 3D</p>
+    </div>
+    <div style="position: fixed; z-index: 0; left: 75vw; top: 0; color: white;">
+        <p>Cycloid 2D</p>
+    </div>
+    <div style="position: fixed; z-index: 0; left: 50vw; top: 50vh; color: white;">
+        <p>2D Waveform</p>
+    </div>
+</body>
+<script src="https://webgl2fundamentals.org/webgl/resources/webgl-utils.js"></script>
+<script src="gl-matrix-min.js"></script>
+<script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+<script src="glFuncs.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
+<script src="fourier.js"></script>
