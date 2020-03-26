@@ -1,6 +1,7 @@
 const vec3 = glMatrix.vec3;
 const mat4 = glMatrix.mat4;
 const glm = glMatrix.glMatrix;
+const twgljs = twgl;
 
 const fragShaderSource = `#version 300 es
 precision highp float;
@@ -351,7 +352,7 @@ function test()
     canvas.addEventListener("wheel", mouseScrollCallback, false);
     window.addEventListener("resize", resizeCallback, false);
 
-    twgl.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
+    twgljs.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
         
     var stats = new Stats();
     stats.showPanel(0);
