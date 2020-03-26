@@ -62,11 +62,11 @@ uniform int freqWidth;
 uniform int freqLength;
 
 
-int decode(in sampler2D tex, in vec2 pos)
+float decode(in sampler2D tex, in vec2 pos)
 {
-    int val = 0;
-    vec4 texOut = floor(texture(tex, pos) * 255.0);
-    val = (int(texOut.r) << 24) + (int(texOut.g) << 16) + (int(texOut.b) << 8) + (int(texOut.a));
+    float val = 0.0;
+    vec4 texOut = texture(tex, pos) * 255.0;
+    val = float((int(texOut.r) << 24) + (int(texOut.g) << 16) + (int(texOut.b) << 8) + (int(texOut.a)));
 
     return val;
 }
@@ -75,16 +75,17 @@ vec3 sine(in vec3 pos, in float time) {
     float omega = 1.0;
     
     float yval = 0.0;
-    int texFreq;
+    float texFreq;
     vec2 texPos;
     float k = 0.0;
-    for (float i = 0.0; i <= float(freqWidth); i++)
+    float blockWidth = 1.0 / float(freqWidth);
+    for (float i = blockWidth / 2.0; i <= 1.0; i+=blockWidth)
     {
-        texPos = vec2(1.0 / (float(freqWidth)-i), 0.0);
+        texPos = vec2(i, 0.0);
         //texFreq = texture(texture0, vec2(texPos,0.0)).w * 255.0;
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI*float(texFreq))/wavelength;       // Wavenumber. 10 is wavelength lambda
-        yval += sineAmplitude * sin(k * pos.x - 2.0*PI*float(texFreq) * time);  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
+        k = (2.0*PI)/(wavelength/texFreq);       // Wavenumber. 10 is wavelength lambda
+        yval += sineAmplitude * sin(k * pos.x - 2.0*PI*texFreq * time);  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
     }
     
     return vec3(pos.x, yval, pos.z);
@@ -98,15 +99,16 @@ vec3 cycloid(in vec3 pos, in float time)
     float xval = 0.0;
     float zval = 0.0;
     float k = 0.0;
-    int texFreq;
+    float texFreq;
     vec2 texPos;
-    for (float i = 0.0; i <= float(freqWidth); i++)
+    float blockWidth = 1.0 / float(freqWidth);
+    for (float i = blockWidth / 2.0; i <= 1.0; i+=blockWidth)
     {
-        texPos = vec2(1.0 / (float(freqWidth)-i), 0.0);
+        texPos = vec2(i, 0.0);
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI*float(texFreq))/wavelength;       // Wavenumber. 10 is wavelength lambda
-        xval += cycloidAmplitude * cos((k * pos.z - time * 2.0*PI*float(texFreq)));
-        yval += cycloidAmplitude * sin((k * pos.z - time * 2.0*PI*float(texFreq)));
+        k = (2.0*PI)/(wavelength/texFreq);       // Wavenumber. 10 is wavelength lambda
+        xval += cycloidAmplitude * cos((k * pos.z - time * 2.0*PI*texFreq));
+        yval += cycloidAmplitude * sin((k * pos.z - time * 2.0*PI*texFreq));
     }
     
     return vec3(xval,yval,pos.z);
@@ -203,17 +205,18 @@ function test()
         projection: mat4.create(),
     }
 
+    // NaNs are populated after state is created
     let state = {
-        aspectRatio: canvas.width / canvas.height,
+        aspectRatio: canvas.clientWidth / canvas.clientHeight,
         scaledWidth: 10 * 2,
-        scaledHeight: 0,
+        scaledHeight: NaN,
         speed: 0,
         cycloidScaledWidth: 44,
         sineScaledWidth: 20,
         sineAmplitude: 1,
         cycloidAmplitude: 1,
         timeFactor: 0.5,
-        frequencies: [1],
+        frequencies: [5],
         encodedFreqs: NaN,
         freqInput: "",
         addFreq: NaN,
@@ -272,9 +275,9 @@ function test()
     let scaledHeight = scaledWidth / aspectRatio;
     */
 
-    mat4.ortho(scene.projection, -state.scaledWidth/2, state.scaledWidth/2, -state.scaledHeight/2, state.scaledHeight/2, -20.0, 20.0);
+    //mat4.ortho(scene.projection, -state.scaledWidth/2, state.scaledWidth/2, -state.scaledHeight/2, state.scaledHeight/2, -100.0, 100.0);
     //mat4.perspective(scene.projection, glm.toRadian(45), canvas.width / canvas.height, 0.1, 100.0);
-    mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
+    //mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
 
     let vertices = [];
     let indices = [];
@@ -332,17 +335,24 @@ function test()
     
     state.reloadFrequencies();
 
-    let mouseScroll = function(e) {
-        state.aspectRatio = canvas.width / canvas.height;
+    let mouseScrollCallback = function(e) {
+        state.aspectRatio = canvas.clientWidth / canvas.clientHeight;
         state.scaledWidth += e.deltaY / 100;
         state.scaledHeight = state.scaledWidth / state.aspectRatio;
         console.log("scaledWidth: " + state.scaledWidth + " : deltaY: " + e.deltaY);
     }
 
-    canvas.addEventListener("wheel", mouseScroll, false);
-    
-    webglUtils.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
+    let resizeCallback = function(e) {
+        twgl.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
+        state.aspectRatio = canvas.clientWidth / canvas.clientHeight;
+        state.scaledHeight = state.scaledWidth / state.aspectRatio;
+    }
 
+    canvas.addEventListener("wheel", mouseScrollCallback, false);
+    window.addEventListener("resize", resizeCallback, false);
+
+    twgl.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
+        
     var stats = new Stats();
     stats.showPanel(0);
     document.body.appendChild(stats.dom);
@@ -380,7 +390,7 @@ function test()
         
         camera.pos = vec3.fromValues(1.0,1.0,1.0);
         mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
-        mat4.ortho(scene.projection, -state.scaledWidth/1.25, state.scaledWidth/1.25, -state.scaledHeight/1.25, state.scaledHeight/1.25, -20.0, 20.0);
+        mat4.ortho(scene.projection, -state.scaledWidth/1.25, state.scaledWidth/1.25, -state.scaledHeight/1.25, state.scaledHeight/1.25, -100.0, 100.0);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "projection"), false, scene.projection);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "view"), false, camera.view);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "model"), false, scene.model);
@@ -389,7 +399,7 @@ function test()
         
         camera.pos = vec3.fromValues(0.0, 0.0, 1.0);
         mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
-        mat4.ortho(scene.projection, -state.scaledWidth/1.25, state.scaledWidth/1.25, -state.scaledHeight/1.25, state.scaledHeight/1.25, -20.0, 20.0);
+        mat4.ortho(scene.projection, -state.scaledWidth/1.25, state.scaledWidth/1.25, -state.scaledHeight/1.25, state.scaledHeight/1.25, -100.0, 100.0);
         gl.viewport(gl.canvas.width / 2, gl.canvas.height / 2, gl.canvas.width / 2, gl.canvas.height / 2);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "projection"), false, scene.projection);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "view"), false, camera.view);
@@ -402,7 +412,7 @@ function test()
         
         camera.pos = vec3.fromValues(0.0, 0.0, 1.0);
         mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
-        mat4.ortho(scene.projection, -state.scaledWidth/2, state.scaledWidth/2, -state.scaledHeight, state.scaledHeight, -20.0, 20.0);
+        mat4.ortho(scene.projection, -state.scaledWidth/2, state.scaledWidth/2, -state.scaledHeight, state.scaledHeight, -100.0, 100.0);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "projection"), false, scene.projection);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "view"), false, camera.view);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "model"), false, scene.model);
@@ -417,15 +427,13 @@ function test()
     animate(0);
     
     let gui = new dat.GUI();
-    gui.add(state, "scaledWidth", 0, 10);
-    gui.add(state, "sineAmplitude", 0, 10);
-    gui.add(state, "cycloidAmplitude", 0, 10);
-    gui.add(state, "timeFactor", 0.001, 2);
-    gui.add(state, "wavelength", 0.001, 1000);
-    gui.add(state, "freqInput");
-    gui.add(state, "addFreq");
-    gui.add(state, "clearFreqs");
-    gui.add(state, "frequencies");
+    gui.add(state, "sineAmplitude", 0, 10).name("Sine Amplitude");
+    gui.add(state, "cycloidAmplitude", 0, 10).name("Cycloid Amplitude");
+    gui.add(state, "timeFactor", 0.001, 2).name("Time Factor");
+    gui.add(state, "wavelength", 0.001, 1000).name("Wavelength");
+    gui.add(state, "freqInput").name("Freq. Input");
+    gui.add(state, "addFreq").name("Add Freq.");
+    gui.add(state, "clearFreqs").name("Clear Freqs.");
 }
 
 window.onload(test());
