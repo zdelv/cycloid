@@ -1,4 +1,5 @@
 const vec3 = glMatrix.vec3;
+const vec4 = glMatrix.vec4;
 const mat4 = glMatrix.mat4;
 const glm = glMatrix.glMatrix;
 const twgljs = twgl;
@@ -8,6 +9,7 @@ precision highp float;
 
 uniform sampler2D texture0;
 uniform float time;
+uniform vec4 color;
 
 out vec4 outColor;
 
@@ -18,7 +20,7 @@ void main() {
     //outColor = vec4(0.0, 0.0, texOut, 1.0);
     
     vec4 texOut = texture(texture0, vec2(0.5,0.4));
-    outColor = vec4(0.0,0.5,0.5,1.0);
+    outColor = color;
 }
 `
 
@@ -224,6 +226,8 @@ function test()
         clearFreqs: NaN,
         reloadFrequencies: NaN,
         wavelength: 5.0,            // NOT PIXELS, World Space Coordinates
+        color: [0,127,127,255],     // 0-255, because dat.GUI uses that range
+        reshapeColor: NaN,
     }
     
     state.scaledHeight = state.scaledWidth / state.aspectRatio;
@@ -265,6 +269,16 @@ function test()
         state.encodedFreqs = genFreq(state.frequencies);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, state.encodedFreqs.length/4, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, state.encodedFreqs);
         console.log(state.encodedFreqs);
+    }
+
+    // Convert from 0-255 to 0-1 and return. Uses current color state
+    state.reshapeColor = () => {
+        let newColors = [0.0, 0.0, 0.0, 1.0];
+        for (let i = 0; i < 3; i++) {
+            newColors[i] = (state.color[i] / 255);
+        }
+        console.log(newColors);
+        return newColors;
     }
     
 
@@ -384,6 +398,7 @@ function test()
         gl.uniform1f(gl.getUniformLocation(shaderProg, "sineAmplitude"), state.sineAmplitude);
         gl.uniform1f(gl.getUniformLocation(shaderProg, "cycloidAmplitude"), state.cycloidAmplitude);
         gl.uniform1f(gl.getUniformLocation(shaderProg, "wavelength"), state.wavelength);
+        gl.uniform4fv(gl.getUniformLocation(shaderProg, "color"), state.reshapeColor());
         
 
         gl.viewport(0, gl.canvas.height / 2, gl.canvas.width / 2, gl.canvas.height / 2);
@@ -432,6 +447,7 @@ function test()
     gui.add(state, "cycloidAmplitude", 0, 10).name("Cycloid Amplitude");
     gui.add(state, "timeFactor", 0.001, 2).name("Time Factor");
     gui.add(state, "wavelength", 0.001, 1000).name("Wavelength");
+    gui.addColor(state, "color");
     gui.add(state, "freqInput").name("Freq. Input");
     gui.add(state, "addFreq").name("Add Freq.");
     gui.add(state, "clearFreqs").name("Clear Freqs.");
