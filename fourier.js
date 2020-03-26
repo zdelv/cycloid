@@ -59,7 +59,7 @@ uniform mat4 model;
 uniform int renderSine;
 uniform float sineAmplitude;
 uniform float cycloidAmplitude;
-uniform float wavelength;
+uniform float velocity;
 
 uniform int freqWidth;
 uniform int freqLength;
@@ -87,7 +87,7 @@ vec3 sine(in vec3 pos, in float time) {
         texPos = vec2(i, 0.0);
         //texFreq = texture(texture0, vec2(texPos,0.0)).w * 255.0;
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI)/(wavelength/texFreq);       // Wavenumber. 10 is wavelength lambda
+        k = (2.0*PI)/(velocity/texFreq);       // Wavenumber. Velocity = Freq * Wavelength
         yval += sineAmplitude * sin(k * pos.x - 2.0*PI*texFreq * time);  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
     }
     
@@ -109,7 +109,7 @@ vec3 cycloid(in vec3 pos, in float time)
     {
         texPos = vec2(i, 0.0);
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI)/(wavelength/texFreq);       // Wavenumber. 10 is wavelength lambda
+        k = (2.0*PI)/(velocity/texFreq);       // Wavenumber. Velocity = Freq * Wavelength
         xval += cycloidAmplitude * cos((k * pos.z - time * 2.0*PI*texFreq));
         yval += cycloidAmplitude * sin((k * pos.z - time * 2.0*PI*texFreq));
     }
@@ -225,7 +225,7 @@ function test()
         addFreq: NaN,
         clearFreqs: NaN,
         reloadFrequencies: NaN,
-        wavelength: 5.0,            // NOT PIXELS, World Space Coordinates
+        velocity: 5.0,            // NOT PIXELS, World Space Coordinates
         color: [0,127,127,255],     // 0-255, because dat.GUI uses that range
         reshapeColor: NaN,
     }
@@ -277,7 +277,6 @@ function test()
         for (let i = 0; i < 3; i++) {
             newColors[i] = (state.color[i] / 255);
         }
-        console.log(newColors);
         return newColors;
     }
     
@@ -351,6 +350,8 @@ function test()
     state.reloadFrequencies();
 
     let mouseScrollCallback = function(e) {
+        if (state.scaledWidth == 1 && e.deltaY < 1)
+            return;
         state.aspectRatio = canvas.clientWidth / canvas.clientHeight;
         state.scaledWidth += e.deltaY / 100;
         state.scaledHeight = state.scaledWidth / state.aspectRatio;
@@ -397,7 +398,7 @@ function test()
         gl.uniform1i(gl.getUniformLocation(shaderProg, "freqHeight"), 1);
         gl.uniform1f(gl.getUniformLocation(shaderProg, "sineAmplitude"), state.sineAmplitude);
         gl.uniform1f(gl.getUniformLocation(shaderProg, "cycloidAmplitude"), state.cycloidAmplitude);
-        gl.uniform1f(gl.getUniformLocation(shaderProg, "wavelength"), state.wavelength);
+        gl.uniform1f(gl.getUniformLocation(shaderProg, "velocity"), state.velocity);
         gl.uniform4fv(gl.getUniformLocation(shaderProg, "color"), state.reshapeColor());
         
 
@@ -446,7 +447,7 @@ function test()
     gui.add(state, "sineAmplitude", 0, 10).name("Sine Amplitude");
     gui.add(state, "cycloidAmplitude", 0, 10).name("Cycloid Amplitude");
     gui.add(state, "timeFactor", 0.001, 2).name("Time Factor");
-    gui.add(state, "wavelength", 0.001, 1000).name("Wavelength");
+    gui.add(state, "velocity", 0.001, 1000).name("Velocity");
     gui.addColor(state, "color");
     gui.add(state, "freqInput").name("Freq. Input");
     gui.add(state, "addFreq").name("Add Freq.");
