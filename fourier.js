@@ -56,6 +56,7 @@ uniform mat4 model;
 uniform int renderSine;
 uniform float sineAmplitude;
 uniform float cycloidAmplitude;
+uniform float wavelength;
 
 uniform int freqWidth;
 uniform int freqLength;
@@ -82,7 +83,7 @@ vec3 sine(in vec3 pos, in float time) {
         texPos = vec2(1.0 / (float(freqWidth)-i), 0.0);
         //texFreq = texture(texture0, vec2(texPos,0.0)).w * 255.0;
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI*float(texFreq))/10.0;       // Wavenumber. 10 is wavelength lambda
+        k = (2.0*PI*float(texFreq))/wavelength;       // Wavenumber. 10 is wavelength lambda
         yval += sineAmplitude * sin(k * pos.x - 2.0*PI*float(texFreq) * time);  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
     }
     
@@ -103,7 +104,7 @@ vec3 cycloid(in vec3 pos, in float time)
     {
         texPos = vec2(1.0 / (float(freqWidth)-i), 0.0);
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI*float(texFreq))/10.0;       // Wavenumber. 10 is wavelength lambda
+        k = (2.0*PI*float(texFreq))/wavelength;       // Wavenumber. 10 is wavelength lambda
         xval += cycloidAmplitude * cos((k * pos.z - time * 2.0*PI*float(texFreq)));
         yval += cycloidAmplitude * sin((k * pos.z - time * 2.0*PI*float(texFreq)));
     }
@@ -211,10 +212,57 @@ function test()
         sineScaledWidth: 20,
         sineAmplitude: 1,
         cycloidAmplitude: 1,
-        timeFactor: 0.5
+        timeFactor: 0.5,
+        frequencies: [1],
+        encodedFreqs: NaN,
+        freqInput: "",
+        addFreq: NaN,
+        clearFreqs: NaN,
+        reloadFrequencies: NaN,
+        wavelength: 5.0,            // NOT PIXELS, World Space Coordinates
     }
-
+    
     state.scaledHeight = state.scaledWidth / state.aspectRatio;
+    
+    let genFreq = function(freqs) {
+        let outFreqs = new Uint8Array(freqs.length*4); 
+
+        if (freqs === undefined || freqs.length == 0)
+            return new Uint8Array([0,0,0,0]);
+          
+        j = 0;
+        for (let i = 0; i < freqs.length * 4; i+=4)
+        {
+            outFreqs[i+3] = freqs[j] & 0xFF;           // Mask the lowest 8 bits
+            outFreqs[i+2] = (freqs[j] >> 8) & 0xFF;   // Shift 8 then mask the lowest 8 bits
+            outFreqs[i+1] = (freqs[j] >> 16) & 0xFF;  // Shift 16 then mask the lowest 8 bits
+            outFreqs[i] = (freqs[j] >> 24) & 0xFF;    // Shift 24 then mask the lowest 8 bits
+            j += 1;
+        }
+        return outFreqs;
+    };
+    
+    state.addFreq = () => { 
+        if (Number.isNaN(parseInt(state.freqInput)))
+        {
+            console.log("Must be a number");
+        }
+        else
+        {
+            state.frequencies.push(parseInt(state.freqInput)); 
+            state.reloadFrequencies();
+        }
+        console.log(state.frequencies); 
+        };
+        
+    state.clearFreqs = () => { state.frequencies = []; state.encodedFreqs = []; state.reloadFrequencies(); };
+
+    state.reloadFrequencies = () => {
+        state.encodedFreqs = genFreq(state.frequencies);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, state.encodedFreqs.length/4, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, state.encodedFreqs);
+        console.log(state.encodedFreqs);
+    }
+    
 
     console.log(state);
 
@@ -273,34 +321,16 @@ function test()
         0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3,
     ]);
 
-    let genFreq = function(freqs) {
-       let outFreqs = new Uint8Array(freqs.length*4); 
-       
-       j = 0;
-       for (let i = 0; i < freqs.length * 4; i+=4)
-       {
-           outFreqs[i+3] = freqs[j] & 0xFF;           // Mask the lowest 8 bits
-           outFreqs[i+2] = (freqs[j] >> 8) & 0xFF;   // Shift 8 then mask the lowest 8 bits
-           outFreqs[i+1] = (freqs[j] >> 16) & 0xFF;  // Shift 16 then mask the lowest 8 bits
-           outFreqs[i] = (freqs[j] >> 24) & 0xFF;    // Shift 24 then mask the lowest 8 bits
-           j += 1;
-       }
-       return outFreqs;
-    };
-    let frequencies = new Uint8Array();
-    frequencies = genFreq([1,2,3,4,5,6,100]);
-    console.log(frequencies);
 
-    let texData = new Uint8Array([0, 0, 255, 255, 255, 0 ,0, 255]);
     gl.pixelStorei(gl.PACK_ALIGNMENT, 4);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, frequencies.length/4, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, frequencies);
     
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     
+    state.reloadFrequencies();
 
     let mouseScroll = function(e) {
         state.aspectRatio = canvas.width / canvas.height;
@@ -338,10 +368,11 @@ function test()
         gl.useProgram(shaderProg);
         
         gl.uniform1f(gl.getUniformLocation(shaderProg, "time"), globalTime);
-        gl.uniform1i(gl.getUniformLocation(shaderProg, "freqWidth"), frequencies.length / 4);
+        gl.uniform1i(gl.getUniformLocation(shaderProg, "freqWidth"), state.encodedFreqs.length / 4);
         gl.uniform1i(gl.getUniformLocation(shaderProg, "freqHeight"), 1);
         gl.uniform1f(gl.getUniformLocation(shaderProg, "sineAmplitude"), state.sineAmplitude);
         gl.uniform1f(gl.getUniformLocation(shaderProg, "cycloidAmplitude"), state.cycloidAmplitude);
+        gl.uniform1f(gl.getUniformLocation(shaderProg, "wavelength"), state.wavelength);
         
 
         gl.viewport(0, gl.canvas.height / 2, gl.canvas.width / 2, gl.canvas.height / 2);
@@ -385,18 +416,16 @@ function test()
 
     animate(0);
     
-    let speed = 10;
-    let testFunc = function() {
-        this.text = "Hello";
-        this.speed = 10;
-        this.vals = [1,2,3,4];
-    };
-    
     let gui = new dat.GUI();
     gui.add(state, "scaledWidth", 0, 10);
     gui.add(state, "sineAmplitude", 0, 10);
     gui.add(state, "cycloidAmplitude", 0, 10);
     gui.add(state, "timeFactor", 0.001, 2);
+    gui.add(state, "wavelength", 0.001, 1000);
+    gui.add(state, "freqInput");
+    gui.add(state, "addFreq");
+    gui.add(state, "clearFreqs");
+    gui.add(state, "frequencies");
 }
 
 window.onload(test());
