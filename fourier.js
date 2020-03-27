@@ -183,6 +183,8 @@ class Bounds {
         this.y2 = y2;
     }
 
+    // Checks if x,y is within the bounds given
+    // Returns true if so, false if not
     within(x,y) {
         if (x > this.x1 && x < this.x2) {
             if (y > this.y1 && y < this.y2) {
@@ -191,6 +193,31 @@ class Bounds {
         }
         return false;
     }
+
+    update(x1,y1,x2,y2) {
+        this.x1 = x1;
+        this.x2 = x2;
+        this.y1 = y1;
+        this.y2 = y2;
+    }
+}
+
+// https://html-online.com/articles/get-url-parameters-javascript/
+// Quick and dirty way
+function getUrlVars() {
+    var vars = {};
+    var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) {
+        vars[key] = value;
+    });
+    return vars;
+}
+
+function getUrlParam(parameter, defaultvalue){
+    var urlparameter = defaultvalue;
+    if(window.location.href.indexOf(parameter) > -1){
+        urlparameter = getUrlVars()[parameter];
+        }
+    return urlparameter;
 }
 
 function test() 
@@ -233,7 +260,7 @@ function test()
         CYCLOID2D: 'cycloid2d',
         WAVEFORM2D: 'waveform2d',
     }
-    
+
     // NaNs are populated after state is created
     class State {
         constructor() {
@@ -254,12 +281,24 @@ function test()
             this.sineAmplitude = 1;
             this.cycloidAmplitude = 1;
             this.timeFactor = 0.5;
-            this.frequencies = [5];
+            this.frequencies = [];
             this.encodedFreqs = NaN;
             this.freqInput = "";
             this.velocity = 5.0;                    // NOT PIXELS  World Space Coordinates
             this.color = [0, 127, 127, 255];        // 0-255  because dat.GUI uses that range
             this.highlighted = undefined;           // Defines which UI section we are currently using
+
+            let urlFreqs = getUrlParam("freqs", undefined);
+            if (urlFreqs == null)
+            {
+                // Default to 5Hz if no url input
+                this.frequencies = [5];
+            }
+            else
+            {
+                this.frequencies = urlFreqs.split(",").map((i) => parseInt(i));
+            }
+            
         }
 
         addFreq() {
@@ -269,7 +308,13 @@ function test()
             }
             else
             {
-                this.frequencies.push(parseInt(this.freqInput)); 
+                this.frequencies.push(parseInt(this.freqInput));
+                let urlFreqs = "?freqs=" + this.frequencies[0];
+                for (let i = 1; i < this.frequencies.length; i++)
+                {
+                    urlFreqs += "," + this.frequencies[i]
+                }  
+                window.history.replaceState(null, null, urlFreqs);
                 this.reloadFrequencies();
             }
             console.log(this.frequencies); 
@@ -278,6 +323,7 @@ function test()
         clearFreqs() {
             this.frequencies = [];
             this.encodedFreqs = [];
+            window.history.replaceState(null, null, "?freqs=")
             this.reloadFrequencies();
         }
 
@@ -318,19 +364,19 @@ function test()
         let outFreqs = new Uint8Array(freqs.length*4); 
         
         let j = 0;
-        for (let i = 0; i < freqs.length * 4; i+=4)
+        for (let i = 0; i < freqs.length * 4; i+=4,j+=1)
         {
-            outFreqs[i+3] = freqs[j] & 0xFF;           // Mask the lowest 8 bits
-            outFreqs[i+2] = (freqs[j] >> 8) & 0xFF;   // Shift 8 then mask the lowest 8 bits
-            outFreqs[i+1] = (freqs[j] >> 16) & 0xFF;  // Shift 16 then mask the lowest 8 bits
-            outFreqs[i] = (freqs[j] >> 24) & 0xFF;    // Shift 24 then mask the lowest 8 bits
-            j += 1;
+            outFreqs[i+3] =  freqs[j]        & 0xFF;    // Mask the lowest 8 bits
+            outFreqs[i+2] = (freqs[j] >> 8)  & 0xFF;    // Shift 8 then mask the lowest 8 bits
+            outFreqs[i+1] = (freqs[j] >> 16) & 0xFF;    // Shift 16 then mask the lowest 8 bits
+            outFreqs[i] =   (freqs[j] >> 24) & 0xFF;    // Shift 24 then mask the lowest 8 bits
         }
         return outFreqs;
     };
     
     // Bounds for the UI. Used to find where each mouse click is
     let UIBounds = {
+        // Another object so that I can iterate over it
         bounds: {
             cycloid3d:  new Bounds(0,0,canvas.clientWidth/2,canvas.clientHeight/2),
             cycloid2d:  new Bounds(canvas.clientWidth/2,0,canvas.clientWidth,canvas.clientHeight/2),
@@ -342,9 +388,9 @@ function test()
 
     // Brute force redeclare all bounds. Might change to update rather than redeclare
     UIBounds.regenBounds = function(e) {
-        UIBounds.bounds.cycloid3d =  new Bounds(0,0,canvas.clientWidth/2,canvas.clientHeight/2);
-        UIBounds.bounds.cycloid2d =  new Bounds(canvas.clientWidth/2,0,canvas.clientWidth,canvas.clientHeight/2);
-        UIBounds.bounds.waveform2d = new Bounds(0,canvas.clientHeight/2,canvas.clientWidth,canvas.clientHeight);
+        UIBounds.bounds.cycloid3d.update(0,0,canvas.clientWidth/2,canvas.clientHeight/2);
+        UIBounds.bounds.cycloid2d.update(canvas.clientWidth/2,0,canvas.clientWidth,canvas.clientHeight/2);
+        UIBounds.bounds.waveform2d.update(0,canvas.clientHeight/2,canvas.clientWidth,canvas.clientHeight);
     }
 
     let vertices = [];
@@ -431,8 +477,11 @@ function test()
                 break;
         }
         
-        state.width += e.deltaY / 100;
-        state.height = state.width / state.aspectRatio;
+        if (state.highlighted != null)
+        {
+            state.width += e.deltaY / 100;
+            state.height = state.width / state.aspectRatio;
+        }
     }
 
     let resizeCallback = function(e) {
