@@ -206,7 +206,7 @@ class Bounds {
 // Quick and dirty way
 function getUrlVars() {
     var vars = {};
-    var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) {
+    var parts = decodeURIComponent(window.location.href).replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) {
         vars[key] = value;
     });
     return vars;
@@ -314,7 +314,7 @@ function test()
                 {
                     urlFreqs += "," + this.frequencies[i]
                 }  
-                window.history.replaceState(null, null, urlFreqs);
+                window.history.replaceState(null, null, encodeURI(urlFreqs));
                 this.reloadFrequencies();
             }
             console.log(this.frequencies); 
@@ -323,7 +323,7 @@ function test()
         clearFreqs() {
             this.frequencies = [];
             this.encodedFreqs = [];
-            window.history.replaceState(null, null, "?freqs=")
+            window.history.replaceState(null, null, encodeURI("?freqs="))
             this.reloadFrequencies();
         }
 
