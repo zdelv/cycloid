@@ -1,3 +1,5 @@
+"use strict";
+
 const vec3 = glMatrix.vec3;
 const vec4 = glMatrix.vec4;
 const mat4 = glMatrix.mat4;
@@ -173,6 +175,24 @@ function generateCycloid(size, dx, vertices, indices)
     }
 }
 
+class Bounds {
+    constructor(x1, y1, x2, y2) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+    }
+
+    within(x,y) {
+        if (x > this.x1 && x < this.x2) {
+            if (y > this.y1 && y < this.y2) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
 function test() 
 {
     const canvas = document.getElementById("c");
@@ -208,37 +228,96 @@ function test()
         projection: mat4.create(),
     }
 
-    // NaNs are populated after state is created
-    let state = {
-        aspectRatio: canvas.clientWidth / canvas.clientHeight,
-        scaledWidth: 10 * 2,
-        scaledHeight: NaN,
-        speed: 0,
-        cycloidScaledWidth: 44,
-        sineScaledWidth: 20,
-        sineAmplitude: 1,
-        cycloidAmplitude: 1,
-        timeFactor: 0.5,
-        frequencies: [5],
-        encodedFreqs: NaN,
-        freqInput: "",
-        addFreq: NaN,
-        clearFreqs: NaN,
-        reloadFrequencies: NaN,
-        velocity: 5.0,            // NOT PIXELS, World Space Coordinates
-        color: [0,127,127,255],     // 0-255, because dat.GUI uses that range
-        reshapeColor: NaN,
+    let UIState = {
+        CYCLOID3D: 'cycloid3d',
+        CYCLOID2D: 'cycloid2d',
+        WAVEFORM2D: 'waveform2d',
     }
     
-    state.scaledHeight = state.scaledWidth / state.aspectRatio;
-    
-    let genFreq = function(freqs) {
-        let outFreqs = new Uint8Array(freqs.length*4); 
+    // NaNs are populated after state is created
+    class State {
+        constructor() {
+            // Global Width/Height
+            this.aspectRatio = canvas.clientWidth / canvas.clientHeight;
+            this.width = 10 * 2;
+            this.height = this.width / this.aspectRatio;
+            
+            // UI Width/Height
+            this.cycloid3dWidth = 16;
+            this.cycloid3dHeight = this.cycloid3dWidth / this.aspectRatio;
+            this.cycloid2dWidth = 10;
+            this.cycloid2dHeight = this.cycloid2dWidth / this.aspectRatio;
+            this.waveform2dWidth = 20;
+            this.waveform2dHeight = this.waveform2dWidth / this.aspectRatio;
+            
+            // Parameters
+            this.sineAmplitude = 1;
+            this.cycloidAmplitude = 1;
+            this.timeFactor = 0.5;
+            this.frequencies = [5];
+            this.encodedFreqs = NaN;
+            this.freqInput = "";
+            this.velocity = 5.0;                    // NOT PIXELS  World Space Coordinates
+            this.color = [0, 127, 127, 255];        // 0-255  because dat.GUI uses that range
+            this.highlighted = undefined;           // Defines which UI section we are currently using
+        }
 
+        addFreq() {
+            if (Number.isNaN(parseInt(this.freqInput)))
+            {
+                console.log("Must be a number");
+            }
+            else
+            {
+                this.frequencies.push(parseInt(this.freqInput)); 
+                this.reloadFrequencies();
+            }
+            console.log(this.frequencies); 
+        }
+
+        clearFreqs() {
+            this.frequencies = [];
+            this.encodedFreqs = [];
+            this.reloadFrequencies();
+        }
+
+        reloadFrequencies() {
+            this.encodedFreqs = genFreq(this.frequencies);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.encodedFreqs.length/4, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.encodedFreqs);
+            console.log(this.encodedFreqs);
+        }
+
+        reshapeColor() {
+            let newColors = [0.0, 0.0, 0.0, 1.0];
+            for (let i = 0; i < 3; i++) {
+                newColors[i] = (this.color[i] / 255);
+            }
+            return newColors;
+        }
+
+        resetUI() {
+            this.aspectRatio = canvas.clientWidth / canvas.clientHeight;
+            this.width = 10 * 2;
+            this.height = this.width / this.aspectRatio;
+            
+            this.cycloid3dWidth = 16;
+            this.cycloid3dHeight = this.cycloid3dWidth / this.aspectRatio;
+            this.cycloid2dWidth = 10;
+            this.cycloid2dHeight = this.cycloid2dWidth / this.aspectRatio;
+            this.waveform2dWidth = 20;
+            this.waveform2dHeight = this.waveform2dWidth / this.aspectRatio;
+        }
+    }
+    
+    const state = new State();
+    
+    function genFreq(freqs) {
         if (freqs === undefined || freqs.length == 0)
             return new Uint8Array([0,0,0,0]);
           
-        j = 0;
+        let outFreqs = new Uint8Array(freqs.length*4); 
+        
+        let j = 0;
         for (let i = 0; i < freqs.length * 4; i+=4)
         {
             outFreqs[i+3] = freqs[j] & 0xFF;           // Mask the lowest 8 bits
@@ -250,48 +329,23 @@ function test()
         return outFreqs;
     };
     
-    state.addFreq = () => { 
-        if (Number.isNaN(parseInt(state.freqInput)))
-        {
-            console.log("Must be a number");
-        }
-        else
-        {
-            state.frequencies.push(parseInt(state.freqInput)); 
-            state.reloadFrequencies();
-        }
-        console.log(state.frequencies); 
-        };
-        
-    state.clearFreqs = () => { state.frequencies = []; state.encodedFreqs = []; state.reloadFrequencies(); };
-
-    state.reloadFrequencies = () => {
-        state.encodedFreqs = genFreq(state.frequencies);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, state.encodedFreqs.length/4, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, state.encodedFreqs);
-        console.log(state.encodedFreqs);
+    // Bounds for the UI. Used to find where each mouse click is
+    let UIBounds = {
+        bounds: {
+            cycloid3d:  new Bounds(0,0,canvas.clientWidth/2,canvas.clientHeight/2),
+            cycloid2d:  new Bounds(canvas.clientWidth/2,0,canvas.clientWidth,canvas.clientHeight/2),
+            waveform2d: new Bounds(0,canvas.clientHeight/2,canvas.clientWidth,canvas.clientHeight),
+        },
+        // Declared outside, needs to access members
+        regenBounds: NaN,
     }
 
-    // Convert from 0-255 to 0-1 and return. Uses current color state
-    state.reshapeColor = () => {
-        let newColors = [0.0, 0.0, 0.0, 1.0];
-        for (let i = 0; i < 3; i++) {
-            newColors[i] = (state.color[i] / 255);
-        }
-        return newColors;
+    // Brute force redeclare all bounds. Might change to update rather than redeclare
+    UIBounds.regenBounds = function(e) {
+        UIBounds.bounds.cycloid3d =  new Bounds(0,0,canvas.clientWidth/2,canvas.clientHeight/2);
+        UIBounds.bounds.cycloid2d =  new Bounds(canvas.clientWidth/2,0,canvas.clientWidth,canvas.clientHeight/2);
+        UIBounds.bounds.waveform2d = new Bounds(0,canvas.clientHeight/2,canvas.clientWidth,canvas.clientHeight);
     }
-    
-
-    console.log(state);
-
-    /*
-    let aspectRatio = canvas.width / canvas.height;
-    let scaledWidth = 10 * 2; // 10 units on both sides of origin
-    let scaledHeight = scaledWidth / aspectRatio;
-    */
-
-    //mat4.ortho(scene.projection, -state.scaledWidth/2, state.scaledWidth/2, -state.scaledHeight/2, state.scaledHeight/2, -100.0, 100.0);
-    //mat4.perspective(scene.projection, glm.toRadian(45), canvas.width / canvas.height, 0.1, 100.0);
-    //mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
 
     let vertices = [];
     let indices = [];
@@ -350,21 +404,75 @@ function test()
     state.reloadFrequencies();
 
     let mouseScrollCallback = function(e) {
-        if (state.scaledWidth == 1 && e.deltaY < 1)
+        if (state.width == 1 && e.deltaY < 1)
             return;
-        state.aspectRatio = canvas.clientWidth / canvas.clientHeight;
-        state.scaledWidth += e.deltaY / 100;
-        state.scaledHeight = state.scaledWidth / state.aspectRatio;
-        console.log("scaledWidth: " + state.scaledWidth + " : deltaY: " + e.deltaY);
+            
+        switch (state.highlighted) {
+            case UIState.CYCLOID3D:
+                if (state.cycloid3dWidth == 1 && e.deltaY < 1) {
+                    console.log("TEST")
+                    return;
+                }
+                state.cycloid3dWidth += e.deltaY / 100;
+                state.cycloid3dHeight = state.cycloid3dWidth / state.aspectRatio;
+                break;
+            case UIState.CYCLOID2D:
+                if (state.cycloid2dWidth == 1 && e.deltaY < 1)
+                    return;
+                state.cycloid2dWidth += e.deltaY / 100;
+                state.cycloid2dHeight = state.cycloid2dWidth / state.aspectRatio;
+                break;
+            case UIState.WAVEFORM2D:
+                if (state.waveform2dWidth == 1 && e.deltaY < 1)
+                    return;
+                state.waveform2dWidth += e.deltaY / 100;
+                state.waveform2dHeight = state.waveform2dWidth / state.aspectRatio;
+            default:
+                break;
+        }
+        
+        state.width += e.deltaY / 100;
+        state.height = state.width / state.aspectRatio;
     }
 
     let resizeCallback = function(e) {
         twgl.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
         state.aspectRatio = canvas.clientWidth / canvas.clientHeight;
-        state.scaledHeight = state.scaledWidth / state.aspectRatio;
+        state.height = state.width / state.aspectRatio;
+
+        state.cycloid3dHeight = state.cycloid3dWidth / state.aspectRatio;
+        state.cycloid2dHeight = state.cycloid2dWidth / state.aspectRatio;
+        state.waveform2dHeight = state.waveform2dWidth / state.aspectRatio;
+        
+        UIBounds.regenBounds();
+    }
+
+    let mouseDownCallback = function(e) {
+        let pos = {x: e.clientX, y: e.clientY};
+        for (var bound in UIBounds.bounds)
+        {
+            let item = document.getElementById(bound);
+            if (UIBounds.bounds[bound].within(pos.x, pos.y))
+            {
+                if (state.highlighted == bound) 
+                {
+                    item.style.color = "white";
+                    state.highlighted = undefined;
+                }
+                else 
+                {
+                    item.style.color = "grey";
+                    state.highlighted = bound;
+                }
+                console.log(bound);
+                continue;
+            }
+            item.style.color = "white";
+        }
     }
 
     canvas.addEventListener("wheel", mouseScrollCallback, false);
+    canvas.addEventListener("mousedown", mouseDownCallback, false);
     window.addEventListener("resize", resizeCallback, false);
 
     twgljs.resizeCanvasToDisplaySize(gl.canvas, window.devicePixelRatio);
@@ -405,31 +513,33 @@ function test()
         gl.viewport(0, gl.canvas.height / 2, gl.canvas.width / 2, gl.canvas.height / 2);
         gl.bindVertexArray(cycloidVAO);
         
+        // Cycloid 3D
         camera.pos = vec3.fromValues(1.0,1.0,1.0);
         mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
-        mat4.ortho(scene.projection, -state.scaledWidth/1.25, state.scaledWidth/1.25, -state.scaledHeight/1.25, state.scaledHeight/1.25, -100.0, 100.0);
+        mat4.ortho(scene.projection, -state.cycloid3dWidth/1.25, state.cycloid3dWidth/1.25, -state.cycloid3dHeight/1.25, state.cycloid3dHeight/1.25, -100.0, 100.0);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "projection"), false, scene.projection);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "view"), false, camera.view);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "model"), false, scene.model);
         gl.uniform1i(gl.getUniformLocation(shaderProg, "renderSine"), 0);
         gl.drawElements(gl.LINES, cycloidIndices.length, gl.UNSIGNED_SHORT, 0);
         
+        // Cycloid 2D
         camera.pos = vec3.fromValues(0.0, 0.0, 1.0);
         mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
-        mat4.ortho(scene.projection, -state.scaledWidth/1.25, state.scaledWidth/1.25, -state.scaledHeight/1.25, state.scaledHeight/1.25, -100.0, 100.0);
+        mat4.ortho(scene.projection, -state.cycloid2dWidth/1.25, state.cycloid2dWidth/1.25, -state.cycloid2dHeight/1.25, state.cycloid2dHeight/1.25, -100.0, 100.0);
         gl.viewport(gl.canvas.width / 2, gl.canvas.height / 2, gl.canvas.width / 2, gl.canvas.height / 2);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "projection"), false, scene.projection);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "view"), false, camera.view);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "model"), false, scene.model);
         gl.drawElements(gl.LINES, cycloidIndices.length, gl.UNSIGNED_SHORT, 0);
 
-
+        // Waveform 2D
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height / 2);
         gl.bindVertexArray(funcVAO);
         
         camera.pos = vec3.fromValues(0.0, 0.0, 1.0);
         mat4.lookAt(camera.view, camera.pos, camera.dir, camera.up);
-        mat4.ortho(scene.projection, -state.scaledWidth/2, state.scaledWidth/2, -state.scaledHeight, state.scaledHeight, -100.0, 100.0);
+        mat4.ortho(scene.projection, -state.waveform2dWidth/2, state.waveform2dWidth/2, -state.waveform2dHeight, state.waveform2dHeight, -100.0, 100.0);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "projection"), false, scene.projection);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "view"), false, camera.view);
         gl.uniformMatrix4fv(gl.getUniformLocation(shaderProg, "model"), false, scene.model);
@@ -452,6 +562,7 @@ function test()
     gui.add(state, "freqInput").name("Freq. Input");
     gui.add(state, "addFreq").name("Add Freq.");
     gui.add(state, "clearFreqs").name("Clear Freqs.");
+    gui.add(state, "resetUI").name("Reset Zoom");
 }
 
-window.onload(test());
+window.onload = test();
