@@ -542,8 +542,6 @@ function test()
         globalTime = time / 1000;
         globalTime *= state.timeFactor;
         globalTime = globalTime % 10;
-        console.log(globalTime);
-            
 
         gl.enable(gl.DEPTH_TEST);
         //gl.enable(gl.FRAMEBUFFER_SRGB);
