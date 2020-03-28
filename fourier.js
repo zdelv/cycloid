@@ -46,6 +46,8 @@ void main() {
 `
 
 const sineShaderSource = `#version 300 es
+precision highp float;
+const float PI2 = 6.283185307179586;
 const float PI = 3.1415926535897932384626433832795;
 const float PI_2 = 1.57079632679489661923;
 const float PI_4 = 0.785398163397448309616;
@@ -89,8 +91,8 @@ vec3 sine(in vec3 pos, in float time) {
         texPos = vec2(i, 0.0);
         //texFreq = texture(texture0, vec2(texPos,0.0)).w * 255.0;
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI)/(velocity/texFreq);       // Wavenumber. Velocity = Freq * Wavelength
-        yval += sineAmplitude * sin(k * pos.x - 2.0*PI*texFreq * time);  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
+        //k = (PI2)/(velocity/texFreq);       // Wavenumber. Velocity = Freq * Wavelength
+        yval += sineAmplitude * sin(PI2*texFreq*(pos.x / velocity - time));  //sin(kx-wt), k=2pi*f/lambda, w=2pi*f
     }
     
     return vec3(pos.x, yval, pos.z);
@@ -111,9 +113,9 @@ vec3 cycloid(in vec3 pos, in float time)
     {
         texPos = vec2(i, 0.0);
         texFreq = decode(texture0, texPos);
-        k = (2.0*PI)/(velocity/texFreq);       // Wavenumber. Velocity = Freq * Wavelength
-        xval += cycloidAmplitude * cos((k * pos.z - time * 2.0*PI*texFreq));
-        yval += cycloidAmplitude * sin((k * pos.z - time * 2.0*PI*texFreq));
+        //k = (PI2)/(velocity/texFreq);       // Wavenumber. Velocity = Freq * Wavelength
+        xval += cycloidAmplitude * cos(PI2*texFreq*(pos.z / velocity + time));
+        yval += cycloidAmplitude * sin(PI2*texFreq*(pos.z / velocity + time));
     }
     
     return vec3(xval,yval,pos.z);
@@ -539,6 +541,8 @@ function test()
         stats.begin();
         globalTime = time / 1000;
         globalTime *= state.timeFactor;
+        globalTime = globalTime % 10;
+        console.log(globalTime);
             
 
         gl.enable(gl.DEPTH_TEST);
